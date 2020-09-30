@@ -1,0 +1,40 @@
+### RUN IN TDS: ansible-playbook -i hosts.ini node-upgrade.yml -e "NODE_GROUP=tds" -e "solana_version=1.3.14" --ask-become-pass
+### RUN IN MB: ansible-playbook -i hosts.ini node-upgrade.yml -e "NODE_GROUP=mainnet" -e "solana_version=1.2.30" --ask-become-pass
+
+---
+- hosts: "{{ NODE_GROUP }}"
+  tasks:
+    - name: Check Solana Cli version
+      shell: "$HOME/.local/share/solana/install/active_release/bin/solana --version"
+      register: current_solana_cli_version
+
+    - name: Checking CLI version
+      debug:
+        var: current_solana_cli_version.stdout
+
+    - name: Check Solana Node version
+      shell: "$HOME/.local/share/solana/install/active_release/bin/solana show-validators | grep '{{ pubkey }}' | awk -F' ' '{print $7}'"
+      register: current_solana_node_version
+
+    - name: Checking CLI version
+      debug:
+        var: current_solana_node_version.stdout
+
+    - name: Verify Solana cli version
+      fail:
+        msg: We are on the same version( {{ solana_version }} ), no need to ugrade our node
+      when: solana_version in current_solana_node_version.stdout
+
+    - name: Solana version upgrade
+      shell: "$HOME/.local/share/solana/install/active_release/bin/solana-install init {{ solana_version }}"
+      register: shell_result
+
+    - debug:
+        var: shell_result.stdout_lines
+
+    - name: Restart Solana systemd unit
+      become: yes
+      systemd:
+        name: solana
+        state: restarted
+        enabled: yes
